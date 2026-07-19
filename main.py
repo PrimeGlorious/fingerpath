@@ -3,7 +3,7 @@ from time import perf_counter
 
 import cv2
 
-from game.level import Level
+from game.levels import create_level_definitions
 from game.player import Player
 from game.session import GameSession
 from game.window import GameWindow
@@ -22,17 +22,21 @@ def main() -> None:
         target_fps=144
     )
 
-    level = Level(*game_window.size)
+    level_definitions = create_level_definitions(
+        *game_window.size
+    )
+
     player = Player()
 
     session = GameSession(
-        level=level,
+        level_definitions=level_definitions,
         player=player,
         surface_size=game_window.size,
         sensitivity=2.5,
         max_speed=850.0,
         input_deadzone=1.5,
         max_velocity_hold=0.075,
+        death_delay=0.6,
     )
 
     vision_worker = VisionWorker(
@@ -48,15 +52,20 @@ def main() -> None:
         while running:
             delta_time = game_window.tick()
 
-            running, reset_requested = (
-                game_window.process_events()
-            )
+            (
+                running,
+                reset_requested,
+                next_level_requested,
+            ) = game_window.process_events()
 
             if not running:
                 break
 
             if reset_requested:
                 session.reset()
+
+            if next_level_requested:
+                session.next_level()
 
             snapshot = vision_worker.snapshot()
 

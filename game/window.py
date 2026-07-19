@@ -40,21 +40,31 @@ class GameWindow:
             0.001,
         )
 
-    def process_events(self) -> tuple[bool, bool]:
+    def process_events(
+        self,
+    ) -> tuple[bool, bool, bool]:
         running = True
         reset_requested = False
+        next_level_requested = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-            if (
-                event.type == pygame.KEYDOWN
-                and event.key == pygame.K_r
-            ):
+            if event.type != pygame.KEYDOWN:
+                continue
+
+            if event.key == pygame.K_r:
                 reset_requested = True
 
-        return running, reset_requested
+            if event.key == pygame.K_RETURN:
+                next_level_requested = True
+
+        return (
+            running,
+            reset_requested,
+            next_level_requested,
+        )
 
     def render(
         self,
@@ -132,6 +142,15 @@ class GameWindow:
             (55, 60, 65),
         )
 
+        level_surface = self._info_font.render(
+            (
+                f"LEVEL {session.level_number}"
+                f"/{session.total_levels}"
+            ),
+            True,
+            (55, 60, 65),
+        )
+
         coins_surface = self._info_font.render(
             (
                 f"COINS "
@@ -150,7 +169,9 @@ class GameWindow:
         self._screen.blit(
             fps_surface,
             (
-                self.width - fps_surface.get_width() - 16,
+                self.width
+                - fps_surface.get_width()
+                - 16,
                 16,
             ),
         )
@@ -166,9 +187,25 @@ class GameWindow:
         )
 
         self._screen.blit(
+            level_surface,
+            (
+                (
+                    self.width
+                    - level_surface.get_width()
+                )
+                // 2,
+                self.height
+                - level_surface.get_height()
+                - 14,
+            ),
+        )
+
+        self._screen.blit(
             coins_surface,
             (
-                self.width - coins_surface.get_width() - 16,
+                self.width
+                - coins_surface.get_width()
+                - 16,
                 self.height
                 - coins_surface.get_height()
                 - 14,

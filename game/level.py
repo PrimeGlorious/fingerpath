@@ -2,6 +2,7 @@ import pygame
 
 from game.coin import Coin
 from game.hazard import MovingHazard
+from game.level_definition import LevelDefinition
 
 
 class Level:
@@ -9,6 +10,7 @@ class Level:
         self,
         width: int,
         height: int,
+        definition: LevelDefinition,
     ) -> None:
         self.bounds = pygame.Rect(
             4,
@@ -18,63 +20,36 @@ class Level:
         )
 
         self.start_zone = pygame.Rect(
-            50,
-            height // 2 - 60,
-            120,
-            120,
+            definition.start_zone
         )
 
         self.finish_zone = pygame.Rect(
-            width - 170,
-            height // 2 - 60,
-            120,
-            120,
+            definition.finish_zone
         )
 
-        wall_width = 40
-
         self.walls = [
-            pygame.Rect(
-                width // 3,
-                self.bounds.top,
-                wall_width,
-                int(height * 0.72),
-            ),
-            pygame.Rect(
-                width * 2 // 3,
-                int(height * 0.28),
-                wall_width,
-                self.bounds.bottom - int(height * 0.28),
-            ),
+            pygame.Rect(wall)
+            for wall in definition.walls
         ]
 
         self.hazards = [
             MovingHazard(
-                x=width // 2,
-                start_y=110,
-                end_y=height - 110,
-                radius=18,
-                speed=220.0,
-            ),
+                x=hazard.x,
+                start_y=hazard.start_y,
+                end_y=hazard.end_y,
+                radius=hazard.radius,
+                speed=hazard.speed,
+            )
+            for hazard in definition.hazards
         ]
 
         self.coins = [
             Coin(
-                x=240,
-                y=height - 110,
-            ),
-            Coin(
-                x=500,
-                y=height - 140,
-            ),
-            Coin(
-                x=560,
-                y=120,
-            ),
-            Coin(
-                x=730,
-                y=120,
-            ),
+                x=coin.x,
+                y=coin.y,
+                radius=coin.radius,
+            )
+            for coin in definition.coins
         ]
 
     @property
@@ -121,10 +96,15 @@ class Level:
 
         return collected
 
-    def is_finished(self, player_rect: pygame.Rect) -> bool:
+    def is_finished(
+        self,
+        player_rect: pygame.Rect,
+    ) -> bool:
         return (
             self.finish_unlocked
-            and self.finish_zone.contains(player_rect)
+            and self.finish_zone.contains(
+                player_rect
+            )
         )
 
     def player_hits_hazard(

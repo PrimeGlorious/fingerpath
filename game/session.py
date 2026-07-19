@@ -3,6 +3,7 @@ from enum import Enum
 import pygame
 
 from game.level import Level
+from game.level_definition import LevelDefinition
 from game.player import Player
 
 
@@ -17,7 +18,10 @@ class GameState(Enum):
 class GameSession:
     def __init__(
         self,
-        level: Level,
+        level_definitions: tuple[
+            LevelDefinition,
+            ...
+        ],
         player: Player,
         surface_size: tuple[int, int],
         sensitivity: float = 2.5,
@@ -26,15 +30,31 @@ class GameSession:
         max_velocity_hold: float = 0.075,
         death_delay: float = 0.6,
     ) -> None:
-        self.level = level
-        self.player = player
+        if not level_definitions:
+            raise ValueError(
+                "At least one level is required"
+            )
+
         self.surface_size = surface_size
+        self.player = player
         self.sensitivity = sensitivity
         self.max_speed = max_speed
         self.input_deadzone = input_deadzone
         self.max_velocity_hold = max_velocity_hold
         self.death_delay = death_delay
 
+        width, height = surface_size
+
+        self._levels = [
+            Level(
+                width,
+                height,
+                definition,
+            )
+            for definition in level_definitions
+        ]
+
+        self.level_index = 0
         self.state = GameState.READY
         self.control_active = False
         self.deaths = 0
@@ -49,6 +69,25 @@ class GameSession:
         self.reset()
 
     @property
+    def level(self) -> Level:
+        return self._levels[self.level_index]
+
+    @property
+    def level_number(self) -> int:
+        return self.level_index + 1
+
+    @property
+    def total_levels(self) -> int:
+        return len(self._levels)
+
+    @property
+    def is_last_level(self) -> bool:
+        return (
+            self.level_index
+            == self.total_levels - 1
+        )
+
+    @property
     def status_text(self) -> str:
         if self.state is GameState.READY:
             return "Release the pinch to start"
@@ -60,13 +99,38 @@ class GameSession:
             return "HIT - Returning to START"
 
         if self.state is GameState.WON:
-            return "LEVEL COMPLETE - Press R to restart"
+            if self.is_last_level:
+                return (
+                    "ALL LEVELS COMPLETE "
+                    "- Press R to restart"
+                )
+
+            return (
+                "LEVEL COMPLETE "
+                "- Press Enter"
+            )
 
         return ""
 
     def reset(self) -> None:
+        self.level_index = 0
         self.deaths = 0
-        self._reset_round()
+
+        for level in self._levels:
+            level.reset_round()
+
+        self._reset_player_state()
+
+    def next_level(self) -> None:
+        if self.state is not GameState.WON:
+            return
+
+        if self.is_last_level:
+            return
+
+        self.level_index += 1
+        self.level.reset_round()
+        self._reset_player_state()
 
     def update(
         self,
@@ -120,6 +184,7 @@ class GameSession:
             self.player.rect
         ):
             self._stop_movement()
+            self.control_active = False
             self.state = GameState.WON
 
     def _process_input_sample(
@@ -152,7 +217,9 @@ class GameSession:
         ):
             self.state = GameState.RUNNING
             self._stop_movement()
-            self._last_input_position = current_position
+            self._last_input_position = (
+                current_position
+            )
             self._last_sample_time = sample_time
             return
 
@@ -161,7 +228,9 @@ class GameSession:
 
         if self._last_input_position is None:
             self._stop_movement()
-            self._last_input_position = current_position
+            self._last_input_position = (
+                current_position
+            )
             self._last_sample_time = sample_time
             return
 
@@ -174,14 +243,19 @@ class GameSession:
             - self._last_input_position
         )
 
-        self._last_input_position = current_position
+        self._last_input_position = (
+            current_position
+        )
         self._last_sample_time = sample_time
 
         if sample_delta_time <= 0:
             self._stop_movement()
             return
 
-        if input_delta.length() <= self.input_deadzone:
+        if (
+            input_delta.length()
+            <= self.input_deadzone
+        ):
             self._stop_movement()
             return
 
@@ -224,7 +298,9 @@ class GameSession:
 
     def _reset_round(self) -> None:
         self.level.reset_round()
+        self._reset_player_state()
 
+    def _reset_player_state(self) -> None:
         self.player.reset(
             self.level.start_zone.center
         )
