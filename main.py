@@ -1,5 +1,5 @@
-import time
 from pathlib import Path
+from time import perf_counter
 
 import cv2
 
@@ -7,10 +7,7 @@ from game.level import Level
 from game.player import Player
 from game.session import GameSession
 from game.window import GameWindow
-from vision.camera import Camera
-from vision.coordinate_mapper import CoordinateMapper
-from vision.hand_tracker import HandTracker
-from vision.smoothing import PositionSmoother
+from vision.worker import VisionWorker
 
 
 MODEL_PATH = (
@@ -21,31 +18,36 @@ MODEL_PATH = (
 
 
 def main() -> None:
-    camera = Camera()
-    tracker = HandTracker(MODEL_PATH)
-    smoother = PositionSmoother(alpha=0.35)
-    mapper = CoordinateMapper(
-        left=0.15,
-        top=0.15,
-        right=0.85,
-        bottom=0.85,
+    game_window = GameWindow(
+        target_fps=144
     )
 
-    game_window = GameWindow()
     level = Level(*game_window.size)
     player = Player()
+
     session = GameSession(
-        level,
-        player,
-        game_window.size,
+        level=level,
+        player=player,
+        surface_size=game_window.size,
+        sensitivity=2.5,
+        max_speed=850.0,
+        input_deadzone=1.5,
+        max_velocity_hold=0.075,
     )
 
-    started_at = time.perf_counter()
-    game_position: tuple[float, float] | None = None
+    vision_worker = VisionWorker(
+        MODEL_PATH
+    )
+
     running = True
+    last_debug_sample_id = -1
+
+    vision_worker.start()
 
     try:
         while running:
+            delta_time = game_window.tick()
+
             running, reset_requested = (
                 game_window.process_events()
             )
@@ -56,119 +58,41 @@ def main() -> None:
             if reset_requested:
                 session.reset()
 
-            frame = camera.read()
-            mirrored_frame = cv2.flip(frame, 1)
+            snapshot = vision_worker.snapshot()
 
-            timestamp_ms = int(
-                (time.perf_counter() - started_at) * 1000
+            session.update(
+                position=snapshot.position,
+                control_active=snapshot.control_active,
+                sample_id=snapshot.sample_id,
+                sample_time=snapshot.sample_time,
+                delta_time=delta_time,
+                current_time=perf_counter(),
             )
 
-            result = tracker.detect(
-                mirrored_frame,
-                timestamp_ms,
+            game_window.render(
+                session,
+                snapshot.vision_fps,
             )
 
-            fingertip = tracker.get_index_fingertip(result)
-            output_frame = tracker.draw(
-                mirrored_frame,
-                result,
-            )
-
-            height, width = output_frame.shape[:2]
-
-            working_area_start = (
-                int(mapper.left * width),
-                int(mapper.top * height),
-            )
-            working_area_end = (
-                int(mapper.right * width),
-                int(mapper.bottom * height),
-            )
-
-            cv2.rectangle(
-                output_frame,
-                working_area_start,
-                working_area_end,
-                (255, 0, 0),
-                2,
-            )
-
-            if fingertip is not None:
-                smoothed_fingertip = smoother.update(
-                    fingertip
-                )
-                game_position = mapper.map(
-                    smoothed_fingertip
+            if (
+                snapshot.frame is not None
+                and snapshot.sample_id
+                != last_debug_sample_id
+            ):
+                last_debug_sample_id = (
+                    snapshot.sample_id
                 )
 
-                raw_position = (
-                    int(fingertip[0] * width),
-                    int(fingertip[1] * height),
-                )
-                smoothed_position = (
-                    int(smoothed_fingertip[0] * width),
-                    int(smoothed_fingertip[1] * height),
+                cv2.imshow(
+                    "Fingerpath Hand Tracking",
+                    snapshot.frame,
                 )
 
-                cv2.circle(
-                    output_frame,
-                    raw_position,
-                    5,
-                    (0, 255, 255),
-                    -1,
-                )
-
-                cv2.circle(
-                    output_frame,
-                    smoothed_position,
-                    10,
-                    (0, 0, 255),
-                    -1,
-                )
-
-                cv2.putText(
-                    output_frame,
-                    (
-                        f"camera=({smoothed_fingertip[0]:.3f}, "
-                        f"{smoothed_fingertip[1]:.3f})"
-                    ),
-                    (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
-
-                cv2.putText(
-                    output_frame,
-                    (
-                        f"game=({game_position[0]:.3f}, "
-                        f"{game_position[1]:.3f})"
-                    ),
-                    (20, 75),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
-            else:
-                smoother.reset()
-                game_position = None
-
-            session.update(game_position)
-            game_window.render(session)
-
-            cv2.imshow(
-                "Fingerpath Hand Tracking",
-                output_frame,
-            )
-
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                running = False
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    running = False
     finally:
+        vision_worker.close()
         game_window.close()
-        tracker.close()
-        camera.release()
         cv2.destroyAllWindows()
 
 

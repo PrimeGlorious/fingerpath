@@ -13,22 +13,20 @@ class Player:
         self._position.update(center)
         self.rect.center = center
 
-    def move_towards(
+    def move_by(
         self,
-        target: tuple[int, int],
+        movement: pygame.Vector2,
         walls: list[pygame.Rect],
         bounds: pygame.Rect,
     ) -> None:
-        target_position = pygame.Vector2(target)
-        delta = target_position - self._position
-        distance = delta.length()
+        distance = movement.length()
 
         if distance == 0:
             return
 
         max_step = max(1.0, self.size / 4)
         step_count = max(1, ceil(distance / max_step))
-        step = delta / step_count
+        step = movement / step_count
 
         for _ in range(step_count):
             self._move_axis(

@@ -1,6 +1,6 @@
 import pygame
 
-from game.session import GameSession, GameState
+from game.session import GameSession
 
 
 class GameWindow:
@@ -8,11 +8,13 @@ class GameWindow:
         self,
         width: int = 960,
         height: int = 720,
+        target_fps: int = 144,
     ) -> None:
         pygame.init()
 
         self.width = width
         self.height = height
+        self.target_fps = target_fps
 
         self._screen = pygame.display.set_mode(
             (self.width, self.height)
@@ -20,12 +22,23 @@ class GameWindow:
         self._clock = pygame.time.Clock()
         self._zone_font = pygame.font.Font(None, 30)
         self._status_font = pygame.font.Font(None, 36)
+        self._info_font = pygame.font.Font(None, 26)
 
         pygame.display.set_caption("Fingerpath")
 
     @property
     def size(self) -> tuple[int, int]:
         return self.width, self.height
+
+    def tick(self) -> float:
+        milliseconds = self._clock.tick_busy_loop(
+            self.target_fps
+        )
+
+        return max(
+            milliseconds / 1000.0,
+            0.001,
+        )
 
     def process_events(self) -> tuple[bool, bool]:
         running = True
@@ -43,31 +56,17 @@ class GameWindow:
 
         return running, reset_requested
 
-    def render(self, session: GameSession) -> None:
+    def render(
+        self,
+        session: GameSession,
+        vision_fps: float,
+    ) -> None:
         self._screen.fill((240, 240, 240))
 
         session.level.draw(
             self._screen,
             self._zone_font,
         )
-
-        if session.cursor_position is not None:
-            pygame.draw.circle(
-                self._screen,
-                (30, 130, 220),
-                session.cursor_position,
-                9,
-                2,
-            )
-
-            if session.state is GameState.RUNNING:
-                pygame.draw.line(
-                    self._screen,
-                    (120, 170, 220),
-                    session.player.rect.center,
-                    session.cursor_position,
-                    1,
-                )
 
         pygame.draw.rect(
             self._screen,
@@ -76,32 +75,71 @@ class GameWindow:
         )
 
         if session.status_text:
-            text = self._status_font.render(
+            status_surface = self._status_font.render(
                 session.status_text,
                 True,
                 (35, 40, 45),
             )
 
-            background = text.get_rect(
+            status_background = status_surface.get_rect(
                 center=(self.width // 2, 32)
             ).inflate(24, 14)
 
             pygame.draw.rect(
                 self._screen,
                 (255, 255, 255),
-                background,
+                status_background,
                 border_radius=6,
             )
 
             self._screen.blit(
-                text,
-                text.get_rect(
-                    center=background.center,
+                status_surface,
+                status_surface.get_rect(
+                    center=status_background.center
                 ),
             )
 
+        control_text = (
+            "CONTROL ACTIVE"
+            if session.control_active
+            else "CONTROL PAUSED"
+        )
+
+        control_color = (
+            (25, 145, 65)
+            if session.control_active
+            else (170, 45, 45)
+        )
+
+        control_surface = self._info_font.render(
+            control_text,
+            True,
+            control_color,
+        )
+
+        fps_surface = self._info_font.render(
+            (
+                f"GAME {self._clock.get_fps():.0f} FPS"
+                f" | VISION {vision_fps:.0f} FPS"
+            ),
+            True,
+            (55, 60, 65),
+        )
+
+        self._screen.blit(
+            control_surface,
+            (16, 16),
+        )
+
+        self._screen.blit(
+            fps_surface,
+            (
+                self.width - fps_surface.get_width() - 16,
+                16,
+            ),
+        )
+
         pygame.display.flip()
-        self._clock.tick(60)
 
     def close(self) -> None:
         pygame.quit()
