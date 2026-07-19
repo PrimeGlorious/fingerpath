@@ -1,5 +1,7 @@
 import pygame
 
+from game.player import Player
+
 
 class GameWindow:
     def __init__(
@@ -18,6 +20,10 @@ class GameWindow:
 
         pygame.display.set_caption("Fingerpath")
 
+    @property
+    def size(self) -> tuple[int, int]:
+        return self.width, self.height
+
     def process_events(self) -> bool:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -25,23 +31,14 @@ class GameWindow:
 
         return True
 
-    def render(
-        self,
-        position: tuple[float, float] | None,
-    ) -> None:
+    def render(self, player: Player) -> None:
         self._screen.fill((240, 240, 240))
 
-        if position is not None:
-            x = int(position[0] * self.width)
-            y = int(position[1] * self.height)
-
-            player_rect = pygame.Rect(0, 0, 24, 24)
-            player_rect.center = (x, y)
-
+        if player.visible:
             pygame.draw.rect(
                 self._screen,
                 (220, 30, 30),
-                player_rect,
+                player.rect,
             )
 
         pygame.display.flip()

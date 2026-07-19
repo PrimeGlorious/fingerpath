@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 
+from game.player import Player
 from game.window import GameWindow
 from vision.camera import Camera
 from vision.coordinate_mapper import CoordinateMapper
@@ -28,6 +29,7 @@ def main() -> None:
         bottom=0.85,
     )
     game_window = GameWindow()
+    player = Player()
 
     started_at = time.perf_counter()
     game_position: tuple[float, float] | None = None
@@ -130,7 +132,11 @@ def main() -> None:
                 smoother.reset()
                 game_position = None
 
-            game_window.render(game_position)
+            player.update(
+                game_position,
+                game_window.size,
+            )
+            game_window.render(player)
 
             cv2.imshow(
                 "Fingerpath Hand Tracking",
