@@ -30,6 +30,8 @@ HAND_CONNECTIONS = (
     (0, 17),
 )
 
+INDEX_FINGER_TIP = 8
+
 
 class HandTracker:
     def __init__(
@@ -68,6 +70,17 @@ class HandTracker:
             image,
             timestamp_ms,
         )
+
+    def get_index_fingertip(
+            self,
+            result: mp.tasks.vision.HandLandmarkerResult,
+    ) -> tuple[float, float] | None:
+        if not result.hand_landmarks:
+            return None
+
+        landmark = result.hand_landmarks[0][INDEX_FINGER_TIP]
+
+        return landmark.x, landmark.y
 
     def draw(
         self,
