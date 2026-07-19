@@ -5,6 +5,7 @@ import cv2
 
 from vision.camera import Camera
 from vision.hand_tracker import HandTracker
+from vision.smoothing import PositionSmoother
 
 
 MODEL_PATH = (
@@ -17,6 +18,7 @@ MODEL_PATH = (
 def main() -> None:
     camera = Camera()
     tracker = HandTracker(MODEL_PATH)
+    smoother = PositionSmoother(alpha=0.35)
     started_at = time.perf_counter()
 
     try:
@@ -41,17 +43,31 @@ def main() -> None:
             )
 
             if fingertip is not None:
-                x, y = fingertip
+                smoothed_fingertip = smoother.update(fingertip)
+
                 height, width = output_frame.shape[:2]
 
-                pixel_position = (
-                    int(x * width),
-                    int(y * height),
+                raw_position = (
+                    int(fingertip[0] * width),
+                    int(fingertip[1] * height),
+                )
+
+                smoothed_position = (
+                    int(smoothed_fingertip[0] * width),
+                    int(smoothed_fingertip[1] * height),
                 )
 
                 cv2.circle(
                     output_frame,
-                    pixel_position,
+                    raw_position,
+                    5,
+                    (0, 255, 255),
+                    -1,
+                )
+
+                cv2.circle(
+                    output_frame,
+                    smoothed_position,
                     10,
                     (0, 0, 255),
                     -1,
@@ -59,13 +75,18 @@ def main() -> None:
 
                 cv2.putText(
                     output_frame,
-                    f"x={x:.3f} y={y:.3f}",
+                    (
+                        f"x={smoothed_fingertip[0]:.3f} "
+                        f"y={smoothed_fingertip[1]:.3f}"
+                    ),
                     (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.8,
                     (255, 255, 255),
                     2,
                 )
+            else:
+                smoother.reset()
 
             cv2.imshow(
                 "Fingerpath Hand Tracking",
