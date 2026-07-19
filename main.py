@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 
+from game.window import GameWindow
 from vision.camera import Camera
 from vision.coordinate_mapper import CoordinateMapper
 from vision.hand_tracker import HandTracker
@@ -26,10 +27,16 @@ def main() -> None:
         right=0.85,
         bottom=0.85,
     )
+    game_window = GameWindow()
+
     started_at = time.perf_counter()
+    game_position: tuple[float, float] | None = None
+    running = True
 
     try:
-        while True:
+        while running:
+            running = game_window.process_events()
+
             frame = camera.read()
             mirrored_frame = cv2.flip(frame, 1)
 
@@ -43,7 +50,10 @@ def main() -> None:
             )
 
             fingertip = tracker.get_index_fingertip(result)
-            output_frame = tracker.draw(mirrored_frame, result)
+            output_frame = tracker.draw(
+                mirrored_frame,
+                result,
+            )
 
             height, width = output_frame.shape[:2]
 
@@ -118,6 +128,9 @@ def main() -> None:
                 )
             else:
                 smoother.reset()
+                game_position = None
+
+            game_window.render(game_position)
 
             cv2.imshow(
                 "Fingerpath Hand Tracking",
@@ -125,8 +138,9 @@ def main() -> None:
             )
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+                running = False
     finally:
+        game_window.close()
         tracker.close()
         camera.release()
         cv2.destroyAllWindows()
