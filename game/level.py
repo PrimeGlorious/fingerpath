@@ -1,5 +1,7 @@
 import pygame
 
+from game.hazard import MovingHazard
+
 
 class Level:
     def __init__(
@@ -45,11 +47,34 @@ class Level:
             ),
         ]
 
+        self.hazards = [
+            MovingHazard(
+                x=width // 2,
+                start_y=110,
+                end_y=height - 110,
+                radius=18,
+                speed=220.0,
+            ),
+        ]
+
+    def update(self, delta_time: float) -> None:
+        for hazard in self.hazards:
+            hazard.update(delta_time)
+
     def can_start(self, player_rect: pygame.Rect) -> bool:
         return self.start_zone.contains(player_rect)
 
     def is_finished(self, player_rect: pygame.Rect) -> bool:
         return self.finish_zone.contains(player_rect)
+
+    def player_hits_hazard(
+        self,
+        player_rect: pygame.Rect,
+    ) -> bool:
+        return any(
+            hazard.collides(player_rect)
+            for hazard in self.hazards
+        )
 
     def draw(
         self,
@@ -75,6 +100,9 @@ class Level:
                 wall,
             )
 
+        for hazard in self.hazards:
+            hazard.draw(surface)
+
         pygame.draw.rect(
             surface,
             (55, 65, 75),
@@ -87,6 +115,7 @@ class Level:
             True,
             (30, 80, 30),
         )
+
         finish_text = font.render(
             "FINISH",
             True,

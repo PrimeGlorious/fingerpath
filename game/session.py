@@ -10,6 +10,7 @@ class GameState(Enum):
     READY = "ready"
     RUNNING = "running"
     PAUSED = "paused"
+    DEAD = "dead"
     WON = "won"
 
 
@@ -23,6 +24,7 @@ class GameSession:
         max_speed: float = 850.0,
         input_deadzone: float = 1.5,
         max_velocity_hold: float = 0.075,
+        death_delay: float = 0.6,
     ) -> None:
         self.level = level
         self.player = player
@@ -31,15 +33,18 @@ class GameSession:
         self.max_speed = max_speed
         self.input_deadzone = input_deadzone
         self.max_velocity_hold = max_velocity_hold
+        self.death_delay = death_delay
 
         self.state = GameState.READY
         self.control_active = False
+        self.deaths = 0
 
         self._velocity = pygame.Vector2()
         self._velocity_valid_until = 0.0
         self._last_input_position: pygame.Vector2 | None = None
         self._last_sample_id = -1
         self._last_sample_time = 0.0
+        self._dead_until = 0.0
 
         self.reset()
 
@@ -51,23 +56,17 @@ class GameSession:
         if self.state is GameState.PAUSED:
             return "Release the pinch to resume"
 
+        if self.state is GameState.DEAD:
+            return "HIT - Returning to START"
+
         if self.state is GameState.WON:
             return "LEVEL COMPLETE - Press R to restart"
 
         return ""
 
     def reset(self) -> None:
-        self.player.reset(
-            self.level.start_zone.center
-        )
-
-        self.state = GameState.READY
-        self.control_active = False
-
-        self._stop_movement()
-        self._last_input_position = None
-        self._last_sample_id = -1
-        self._last_sample_time = 0.0
+        self.deaths = 0
+        self._reset_round()
 
     def update(
         self,
@@ -78,6 +77,8 @@ class GameSession:
         delta_time: float,
         current_time: float,
     ) -> None:
+        self.level.update(delta_time)
+
         if sample_id != self._last_sample_id:
             self._last_sample_id = sample_id
 
@@ -86,6 +87,12 @@ class GameSession:
                 control_active,
                 sample_time,
             )
+
+        if self.state is GameState.DEAD:
+            if current_time >= self._dead_until:
+                self._reset_round()
+
+            return
 
         if self.state is not GameState.RUNNING:
             return
@@ -98,6 +105,12 @@ class GameSession:
             self.level.walls,
             self.level.bounds,
         )
+
+        if self.level.player_hits_hazard(
+            self.player.rect
+        ):
+            self._kill_player(current_time)
+            return
 
         if self.level.is_finished(
             self.player.rect
@@ -123,6 +136,9 @@ class GameSession:
             if self.state is GameState.RUNNING:
                 self.state = GameState.PAUSED
 
+            return
+
+        if self.state is GameState.DEAD:
             return
 
         current_position = self._to_control_pixels(
@@ -191,6 +207,33 @@ class GameSession:
         self._velocity_valid_until = (
             sample_time + velocity_hold
         )
+
+    def _kill_player(
+        self,
+        current_time: float,
+    ) -> None:
+        self.deaths += 1
+        self.state = GameState.DEAD
+        self.control_active = False
+        self._dead_until = (
+            current_time + self.death_delay
+        )
+        self._last_input_position = None
+        self._stop_movement()
+
+    def _reset_round(self) -> None:
+        self.player.reset(
+            self.level.start_zone.center
+        )
+
+        self.state = GameState.READY
+        self.control_active = False
+
+        self._stop_movement()
+        self._last_input_position = None
+        self._last_sample_id = -1
+        self._last_sample_time = 0.0
+        self._dead_until = 0.0
 
     def _stop_movement(self) -> None:
         self._velocity.update(0, 0)

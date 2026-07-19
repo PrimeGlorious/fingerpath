@@ -126,6 +126,12 @@ class GameWindow:
             (55, 60, 65),
         )
 
+        deaths_surface = self._info_font.render(
+            f"DEATHS {session.deaths}",
+            True,
+            (55, 60, 65),
+        )
+
         self._screen.blit(
             control_surface,
             (16, 16),
@@ -136,6 +142,16 @@ class GameWindow:
             (
                 self.width - fps_surface.get_width() - 16,
                 16,
+            ),
+        )
+
+        self._screen.blit(
+            deaths_surface,
+            (
+                16,
+                self.height
+                - deaths_surface.get_height()
+                - 14,
             ),
         )
 
