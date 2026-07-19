@@ -1,5 +1,6 @@
 import pygame
 
+from game.menu import MenuController
 from game.session import GameSession
 
 
@@ -45,7 +46,7 @@ class GameWindow:
     ) -> tuple[bool, bool, bool]:
         running = True
         reset_requested = False
-        next_level_requested = False
+        menu_requested = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -57,14 +58,24 @@ class GameWindow:
             if event.key == pygame.K_r:
                 reset_requested = True
 
-            if event.key == pygame.K_RETURN:
-                next_level_requested = True
+            if event.key == pygame.K_ESCAPE:
+                menu_requested = True
 
         return (
             running,
             reset_requested,
-            next_level_requested,
+            menu_requested,
         )
+
+    def render_menu(
+        self,
+        menu: MenuController,
+    ) -> None:
+        menu.draw(
+            self._screen
+        )
+
+        pygame.display.flip()
 
     def render(
         self,
@@ -127,6 +138,12 @@ class GameWindow:
             control_color,
         )
 
+        timer_surface = self._info_font.render(
+            f"TIME {session.level_elapsed_time:.2f}",
+            True,
+            (55, 60, 65),
+        )
+
         fps_surface = self._info_font.render(
             (
                 f"GAME {self._clock.get_fps():.0f} FPS"
@@ -164,6 +181,11 @@ class GameWindow:
         self._screen.blit(
             control_surface,
             (16, 16),
+        )
+
+        self._screen.blit(
+            timer_surface,
+            (16, 44),
         )
 
         self._screen.blit(

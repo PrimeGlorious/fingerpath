@@ -62,6 +62,7 @@ class Camera:
             name="camera-capture",
             daemon=True,
         )
+
         self._thread.start()
 
     def read_latest(
@@ -98,6 +99,9 @@ class Camera:
                 success, frame = self._capture.read()
 
                 if not success:
+                    if self._stop_event.is_set():
+                        return
+
                     raise RuntimeError(
                         "Failed to read camera frame"
                     )

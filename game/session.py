@@ -12,16 +12,14 @@ class GameState(Enum):
     RUNNING = "running"
     PAUSED = "paused"
     DEAD = "dead"
-    WON = "won"
+    LEVEL_COMPLETE = "level_complete"
+    GAME_COMPLETE = "game_complete"
 
 
 class GameSession:
     def __init__(
         self,
-        level_definitions: tuple[
-            LevelDefinition,
-            ...
-        ],
+        level_definitions: tuple[LevelDefinition, ...],
         player: Player,
         surface_size: tuple[int, int],
         sensitivity: float = 2.5,
@@ -29,6 +27,7 @@ class GameSession:
         input_deadzone: float = 1.5,
         max_velocity_hold: float = 0.075,
         death_delay: float = 0.6,
+        level_transition_delay: float = 1.5,
     ) -> None:
         if not level_definitions:
             raise ValueError(
@@ -42,6 +41,7 @@ class GameSession:
         self.input_deadzone = input_deadzone
         self.max_velocity_hold = max_velocity_hold
         self.death_delay = death_delay
+        self.level_transition_delay = level_transition_delay
 
         width, height = surface_size
 
@@ -59,12 +59,17 @@ class GameSession:
         self.control_active = False
         self.deaths = 0
 
+        self.level_elapsed_time = 0.0
+        self.total_elapsed_time = 0.0
+        self.completed_level_time = 0.0
+
         self._velocity = pygame.Vector2()
         self._velocity_valid_until = 0.0
         self._last_input_position: pygame.Vector2 | None = None
         self._last_sample_id = -1
         self._last_sample_time = 0.0
         self._dead_until = 0.0
+        self._transition_until = 0.0
 
         self.reset()
 
@@ -98,38 +103,42 @@ class GameSession:
         if self.state is GameState.DEAD:
             return "HIT - Returning to START"
 
-        if self.state is GameState.WON:
-            if self.is_last_level:
-                return (
-                    "ALL LEVELS COMPLETE "
-                    "- Press R to restart"
-                )
-
+        if self.state is GameState.LEVEL_COMPLETE:
             return (
-                "LEVEL COMPLETE "
-                "- Press Enter"
+                f"LEVEL COMPLETE - "
+                f"{self.completed_level_time:.2f}s"
+            )
+
+        if self.state is GameState.GAME_COMPLETE:
+            return (
+                f"ALL LEVELS COMPLETE - "
+                f"{self.total_elapsed_time:.2f}s"
             )
 
         return ""
 
     def reset(self) -> None:
-        self.level_index = 0
+        self.start_level(0)
+
+    def start_level(
+        self,
+        level_index: int,
+    ) -> None:
+        if not 0 <= level_index < self.total_levels:
+            raise ValueError(
+                "Invalid level index"
+            )
+
+        self.level_index = level_index
         self.deaths = 0
+        self.level_elapsed_time = 0.0
+        self.total_elapsed_time = 0.0
+        self.completed_level_time = 0.0
 
         for level in self._levels:
             level.reset_round()
 
-        self._reset_player_state()
-
-    def next_level(self) -> None:
-        if self.state is not GameState.WON:
-            return
-
-        if self.is_last_level:
-            return
-
-        self.level_index += 1
-        self.level.reset_round()
+        self._transition_until = 0.0
         self._reset_player_state()
 
     def update(
@@ -141,7 +150,20 @@ class GameSession:
         delta_time: float,
         current_time: float,
     ) -> None:
-        self.level.update(delta_time)
+        if self.state not in (
+            GameState.LEVEL_COMPLETE,
+            GameState.GAME_COMPLETE,
+        ):
+            self.level.update(delta_time)
+
+        if self.state is GameState.LEVEL_COMPLETE:
+            if current_time >= self._transition_until:
+                self._advance_level()
+
+            return
+
+        if self.state is GameState.GAME_COMPLETE:
+            return
 
         if self.state is GameState.DEAD:
             if current_time >= self._dead_until:
@@ -160,6 +182,9 @@ class GameSession:
 
         if self.state is not GameState.RUNNING:
             return
+
+        self.level_elapsed_time += delta_time
+        self.total_elapsed_time += delta_time
 
         if current_time >= self._velocity_valid_until:
             self._velocity.update(0, 0)
@@ -183,9 +208,7 @@ class GameSession:
         if self.level.is_finished(
             self.player.rect
         ):
-            self._stop_movement()
-            self.control_active = False
-            self.state = GameState.WON
+            self._complete_level(current_time)
 
     def _process_input_sample(
         self,
@@ -217,20 +240,13 @@ class GameSession:
         ):
             self.state = GameState.RUNNING
             self._stop_movement()
-            self._last_input_position = (
-                current_position
-            )
+            self._last_input_position = current_position
             self._last_sample_time = sample_time
-            return
-
-        if self.state is GameState.WON:
             return
 
         if self._last_input_position is None:
             self._stop_movement()
-            self._last_input_position = (
-                current_position
-            )
+            self._last_input_position = current_position
             self._last_sample_time = sample_time
             return
 
@@ -243,9 +259,7 @@ class GameSession:
             - self._last_input_position
         )
 
-        self._last_input_position = (
-            current_position
-        )
+        self._last_input_position = current_position
         self._last_sample_time = sample_time
 
         if sample_delta_time <= 0:
@@ -283,6 +297,35 @@ class GameSession:
             sample_time + velocity_hold
         )
 
+    def _complete_level(
+        self,
+        current_time: float,
+    ) -> None:
+        self.completed_level_time = (
+            self.level_elapsed_time
+        )
+        self.control_active = False
+        self._last_input_position = None
+        self._stop_movement()
+
+        if self.is_last_level:
+            self.state = GameState.GAME_COMPLETE
+            return
+
+        self.state = GameState.LEVEL_COMPLETE
+        self._transition_until = (
+            current_time
+            + self.level_transition_delay
+        )
+
+    def _advance_level(self) -> None:
+        self.level_index += 1
+        self.level.reset_round()
+        self.level_elapsed_time = 0.0
+        self.completed_level_time = 0.0
+        self._transition_until = 0.0
+        self._reset_player_state()
+
     def _kill_player(
         self,
         current_time: float,
@@ -298,6 +341,7 @@ class GameSession:
 
     def _reset_round(self) -> None:
         self.level.reset_round()
+        self.level_elapsed_time = 0.0
         self._reset_player_state()
 
     def _reset_player_state(self) -> None:
