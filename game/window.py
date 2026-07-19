@@ -132,6 +132,16 @@ class GameWindow:
             (55, 60, 65),
         )
 
+        coins_surface = self._info_font.render(
+            (
+                f"COINS "
+                f"{session.level.collected_coins}"
+                f"/{session.level.total_coins}"
+            ),
+            True,
+            (55, 60, 65),
+        )
+
         self._screen.blit(
             control_surface,
             (16, 16),
@@ -151,6 +161,16 @@ class GameWindow:
                 16,
                 self.height
                 - deaths_surface.get_height()
+                - 14,
+            ),
+        )
+
+        self._screen.blit(
+            coins_surface,
+            (
+                self.width - coins_surface.get_width() - 16,
+                self.height
+                - coins_surface.get_height()
                 - 14,
             ),
         )

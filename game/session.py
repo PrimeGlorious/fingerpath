@@ -79,6 +79,12 @@ class GameSession:
     ) -> None:
         self.level.update(delta_time)
 
+        if self.state is GameState.DEAD:
+            if current_time >= self._dead_until:
+                self._reset_round()
+
+            return
+
         if sample_id != self._last_sample_id:
             self._last_sample_id = sample_id
 
@@ -87,12 +93,6 @@ class GameSession:
                 control_active,
                 sample_time,
             )
-
-        if self.state is GameState.DEAD:
-            if current_time >= self._dead_until:
-                self._reset_round()
-
-            return
 
         if self.state is not GameState.RUNNING:
             return
@@ -111,6 +111,10 @@ class GameSession:
         ):
             self._kill_player(current_time)
             return
+
+        self.level.collect_coins(
+            self.player.rect
+        )
 
         if self.level.is_finished(
             self.player.rect
@@ -136,9 +140,6 @@ class GameSession:
             if self.state is GameState.RUNNING:
                 self.state = GameState.PAUSED
 
-            return
-
-        if self.state is GameState.DEAD:
             return
 
         current_position = self._to_control_pixels(
@@ -222,6 +223,8 @@ class GameSession:
         self._stop_movement()
 
     def _reset_round(self) -> None:
+        self.level.reset_round()
+
         self.player.reset(
             self.level.start_zone.center
         )

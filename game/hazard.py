@@ -22,13 +22,14 @@ class MovingHazard:
         self.radius = radius
         self.speed = speed
 
+        self._x = float(x)
         self._start_y = float(start_y)
         self._end_y = float(end_y)
         self._direction = 1.0
 
         self.position = pygame.Vector2(
-            x,
-            start_y,
+            self._x,
+            self._start_y,
         )
 
     def update(self, delta_time: float) -> None:
@@ -44,6 +45,13 @@ class MovingHazard:
         elif self.position.y <= self._start_y:
             self.position.y = self._start_y
             self._direction = 1.0
+
+    def reset(self) -> None:
+        self.position.update(
+            self._x,
+            self._start_y,
+        )
+        self._direction = 1.0
 
     def collides(self, rect: pygame.Rect) -> bool:
         closest_x = max(
