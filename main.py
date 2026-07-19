@@ -3,7 +3,9 @@ from pathlib import Path
 
 import cv2
 
+from game.level import Level
 from game.player import Player
+from game.session import GameSession
 from game.window import GameWindow
 from vision.camera import Camera
 from vision.coordinate_mapper import CoordinateMapper
@@ -28,8 +30,15 @@ def main() -> None:
         right=0.85,
         bottom=0.85,
     )
+
     game_window = GameWindow()
+    level = Level(*game_window.size)
     player = Player()
+    session = GameSession(
+        level,
+        player,
+        game_window.size,
+    )
 
     started_at = time.perf_counter()
     game_position: tuple[float, float] | None = None
@@ -37,7 +46,15 @@ def main() -> None:
 
     try:
         while running:
-            running = game_window.process_events()
+            running, reset_requested = (
+                game_window.process_events()
+            )
+
+            if not running:
+                break
+
+            if reset_requested:
+                session.reset()
 
             frame = camera.read()
             mirrored_frame = cv2.flip(frame, 1)
@@ -77,8 +94,12 @@ def main() -> None:
             )
 
             if fingertip is not None:
-                smoothed_fingertip = smoother.update(fingertip)
-                game_position = mapper.map(smoothed_fingertip)
+                smoothed_fingertip = smoother.update(
+                    fingertip
+                )
+                game_position = mapper.map(
+                    smoothed_fingertip
+                )
 
                 raw_position = (
                     int(fingertip[0] * width),
@@ -96,6 +117,7 @@ def main() -> None:
                     (0, 255, 255),
                     -1,
                 )
+
                 cv2.circle(
                     output_frame,
                     smoothed_position,
@@ -116,6 +138,7 @@ def main() -> None:
                     (255, 255, 255),
                     2,
                 )
+
                 cv2.putText(
                     output_frame,
                     (
@@ -132,11 +155,8 @@ def main() -> None:
                 smoother.reset()
                 game_position = None
 
-            player.update(
-                game_position,
-                game_window.size,
-            )
-            game_window.render(player)
+            session.update(game_position)
+            game_window.render(session)
 
             cv2.imshow(
                 "Fingerpath Hand Tracking",
