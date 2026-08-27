@@ -1,21 +1,11 @@
-class PaymentService:
-    def authenticate_user(self, access_token):
-        """Authenticate a user using an OAuth access token."""
-        if not access_token:
-            raise ValueError("Access token is required")
+class NotificationService:
+    def send_email_notification(self, email, message):
+        """Send an email notification to a user."""
+        if not email:
+            raise ValueError("Email is required")
 
         return {
-            "authenticated": True,
-            "method": "oauth",
-        }
-
-    def create_payment(self, user_id, amount):
-        """Create a payment transaction for an authenticated user."""
-        if amount <= 0:
-            raise ValueError("Amount must be positive")
-
-        return {
-            "user_id": user_id,
-            "amount": amount,
-            "status": "created",
+            "recipient": email,
+            "message": message,
+            "status": "sent",
         }
